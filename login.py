@@ -1,49 +1,61 @@
-import hashlib
 import tkinter as tk
+from tkinter import messagebox
 import pymysql
+from app import MySQLTableInfo
 
+class LoginFrame(tk.Frame):
+    def __init__(self, master=None):
+        super().__init__(master)
+        self.master = master
+        self.master.title("登录")
+        self.master.geometry("300x200")
+        self.create_widgets()
 
-class LoginWindow:
-    def __init__(self, on_login_success):
-        self.conn = pymysql.connect(host='localhost', user='gui', password='LBD8TrTBeMZFBa8t', database='gui')
-        self.cursor = self.conn.cursor()
-
-        self.root = tk.Tk()
-        self.root.geometry('300x200')
-        self.root.title('登录')
-
-        tk.Label(self.root, text='用户名：').place(x=50, y=50)
-        tk.Label(self.root, text='密码：').place(x=50, y=80)
-
-        self.username_entry = tk.Entry(self.root)
-        self.username_entry.place(x=110, y=50)
-
-        self.password_entry = tk.Entry(self.root, show='*')
-        self.password_entry.place(x=110, y=80)
-
-        tk.Button(self.root, text='登录', command=self.login).place(x=110, y=120)
-
-        self.on_login_success = on_login_success
-
-        self.root.mainloop()
+    def create_widgets(self):
+        tk.Label(self.master, text="用户名").grid(row=0, column=0)
+        tk.Label(self.master, text="密码").grid(row=1, column=0)
+        self.username_entry = tk.Entry(self.master)
+        self.password_entry = tk.Entry(self.master, show="*")
+        self.username_entry.grid(row=0, column=1, padx=5, pady=5)
+        self.password_entry.grid(row=1, column=1, padx=5, pady=5)
+        tk.Button(self.master, text="登录", command=self.login).grid(row=2, column=1, padx=5, pady=5)
 
     def login(self):
         username = self.username_entry.get()
         password = self.password_entry.get()
+        if username == "" or password == "":
+            messagebox.showwarning("提示", "请输入用户名和密码！")
+            return
+        try:
+            conn = pymysql.connect(
+                host='localhost',
+                port=3306,
+                user='gui',
+                password='LBD8TrTBeMZFBa8t',
+                db='gui',
+                charset='utf8mb4',
+                cursorclass=pymysql.cursors.DictCursor
+            )
+            with conn.cursor() as cursor:
+                sql = f"SELECT * FROM user WHERE username='{username}' AND password='{password}'"
+                cursor.execute(sql)
+                result = cursor.fetchone()
+                if result:
+                    # 登录成功，关闭当前窗口，打开主界面
+                    self.master.destroy()
+                    root = tk.Tk()
+                    app = MySQLTableInfo(root, username)
+                    app.pack()
+                    root.mainloop()
+                else:
+                    messagebox.showwarning("提示", "用户名或密码错误！")
+        except pymysql.Error as e:
+            messagebox.showerror("错误", f"数据库连接失败！\n{e}")
+        finally:
+            conn.close()
 
-        # 将密码进行 MD5 加密
-        password_md5 = hashlib.md5(password.encode('utf-8')).hexdigest()
 
-        sql = f"SELECT * FROM users WHERE username='{username}' AND password='{password_md5}'"
-        self.cursor.execute(sql)
-        result = self.cursor.fetchone()
-
-        if result is None:
-            tk.messagebox.showerror('错误', '用户名或密码错误')
-        else:
-            # 登录成功，关闭数据库连接
-            self.cursor.close()
-            self.conn.close()
-
-            # 调用登录成功回调函数，并传递用户名参数
-            self.on_login_success(username)
+if __name__ == '__main__':
+    root = tk.Tk()
+    app = LoginFrame(root)
+    app.mainloop()
